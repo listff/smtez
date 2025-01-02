@@ -1,6 +1,7 @@
 import asyncio
 import websockets
 import json
+import typing
 
 class Position:
     x:float = 0
@@ -49,6 +50,7 @@ class smtez:
     websocket: websockets.WebSocketClientProtocol
     __task : asyncio.Task 
     asyncCalls: dict[str,list[asyncio.Future]] = {}
+    asyncEventCalls: dict[str,list[typing.Callable[[typing.Any],asyncio.Future]]] = {}
 
     def __init__(self,serverurl :str) -> None:
         self.serverurl = serverurl
@@ -80,6 +82,12 @@ class smtez:
                                 call.set_result(eventdata)
                                 calls.remove(call)
                                 break
+                    
+                    if eventdata["event"] in self.asyncEventCalls:
+                        calls = self.asyncEventCalls[eventdata["event"]]
+                        for call in calls:
+                            await call(eventdata)
+
             except asyncio.CancelledError:
                 return
 
@@ -89,6 +97,16 @@ class smtez:
         self.websocket = await websockets.connect(self.serverurl)
         self.isConnected = True
         self.__isConnectEvent.set()
+    
+    def addEventListener(self,event:str,callback:typing.Callable[[typing.Any],asyncio.Future]) -> None:
+        if event not in self.asyncEventCalls:
+            self.asyncEventCalls[event] = []
+
+        self.asyncEventCalls[event].append(callback)
+
+    def removeEventListener(self,event,callback) -> None:
+        self.asyncEventCalls[event].remove(callback)
+
     
     async def sendCall(self,cmd:dict):
         waitfuture = asyncio.Future()
@@ -125,6 +143,8 @@ class smtez:
         return {"cmd": "plugins","call": "updataData"}
     def getFeederPart(part:str,package:str):
         return {"cmd": "plugins","call": "getPart","part":part,"package":package}
+    def startBoardWork(boardIndex:int = -1):
+        return { "cmd": "aciton", "aciton": "start", "ignore": True, "forceBoardIndex": boardIndex }
     
     async def syncSetting(self):
         await self.sendCall(smtez.pluginsUpdateData())
