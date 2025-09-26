@@ -50,7 +50,7 @@ class smtez:
     websocket: websockets.WebSocketClientProtocol
     __task : asyncio.Task 
     asyncCalls: dict[str,list[asyncio.Future]] = {}
-    asyncEventCalls: dict[str,list[typing.Callable[[typing.Any],asyncio.Future]]] = {}
+    asyncEventCalls: dict[str,list[typing.Callable[[["smtez"],typing.Any],asyncio.Future]]] = {}
 
     def __init__(self,serverurl :str) -> None:
         self.serverurl = serverurl
@@ -86,7 +86,7 @@ class smtez:
                     if eventdata["event"] in self.asyncEventCalls:
                         calls = self.asyncEventCalls[eventdata["event"]]
                         for call in calls:
-                            await call(eventdata)
+                            asyncio.create_task(call(self,eventdata))
 
             except asyncio.CancelledError:
                 return
